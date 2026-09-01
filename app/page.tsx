@@ -7,10 +7,13 @@ import { LevelMap } from '../components/LevelMap';
 import { PetSanctuary } from '../components/PetSanctuary';
 import { ShopModal } from '../components/ShopModal';
 import { SettingsModal } from '../components/SettingsModal';
-import { loadGameState, setCurrentLevel, GameState } from '../lib/gameState';
+import { loadGameState, saveGameState, setCurrentLevel, GameState } from '../lib/gameState';
 import { getWorldForLevel } from '../game/levelConfigs';
+import { initFirebaseAnonymousAuth, loadStateFromFirebase, syncStateWithFirebase, getLocalUserId } from '../lib/firebase';
+import { COIN_SHOP_ITEMS } from '../components/ShopModal';
+import confetti from 'canvas-confetti';
 
-import { Sparkles } from 'lucide-react';
+import { Sparkles, CheckCircle2 } from 'lucide-react';
 import { soundFX } from '../game/audio/SoundFX';
 
 // Dynamically import GameCanvas with SSR disabled because Phaser 3 requires browser globals (window, navigator)
@@ -36,17 +39,75 @@ export default function Home() {
   const [selectedLevel, setSelectedLevel] = useState<number>(1);
   const [showPandaOverlay, setShowPandaOverlay] = useState<boolean>(false);
   const [autoCountdown, setAutoCountdown] = useState<number>(3);
+  const [paymentToast, setPaymentToast] = useState<string | null>(null);
 
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
 
   useEffect(() => {
-    const loaded = loadGameState();
-    setGameState(loaded);
-    const current = loaded.currentLevel || 1;
-    setSelectedLevel(current);
+    let current = loadGameState();
+    setGameState(current);
+    setSelectedLevel(current.currentLevel || 1);
     setActiveTab('map');
     setMounted(true);
+
+    // 1. Initialize Firebase Anonymous Auth & Sync
+    initFirebaseAnonymousAuth().then(async (uid) => {
+      const cloudData = await loadStateFromFirebase(uid);
+      if (cloudData) {
+        const merged = { ...loadGameState(), ...cloudData };
+        saveGameState(merged);
+        setGameState(merged);
+      }
+    });
+
+    // 2. Handle return from Stripe Checkout
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const purchaseStatus = params.get('purchase');
+      const itemId = params.get('itemId');
+      const coinsParam = Number(params.get('coins') || 0);
+
+      if (purchaseStatus === 'success') {
+        const item = COIN_SHOP_ITEMS.find((i) => i.id === itemId);
+        const coinsToAdd = coinsParam || item?.coinsAmount || item?.rewards?.coins || 500;
+
+        const updated = { ...loadGameState() };
+        updated.coins += coinsToAdd;
+
+        if (item) {
+          if (item.rewards.hammers) updated.boosters.hammers += item.rewards.hammers;
+          if (item.rewards.rockets) updated.boosters.rockets += item.rewards.rockets;
+          if (item.rewards.colorBombs) updated.boosters.colorBombs += item.rewards.colorBombs;
+          if (item.rewards.shuffles) updated.boosters.shuffles += item.rewards.shuffles;
+          if (item.rewards.accessory && !updated.unlockedAccessories.includes(item.rewards.accessory)) {
+            updated.unlockedAccessories.push(item.rewards.accessory);
+          }
+          if (item.rewards.isVip) {
+            updated.isVip = true;
+            updated.highestLevelUnlocked = 100;
+          }
+        }
+
+        saveGameState(updated);
+        const uid = getLocalUserId();
+        syncStateWithFirebase(uid, updated);
+        setGameState(updated);
+
+        // Celebration
+        soundFX.playVictory();
+        confetti({ particleCount: 100, spread: 80, origin: { y: 0.5 } });
+        setPaymentToast(`Payment Successful! +${coinsToAdd} 🪙 Coins Added to Inventory! 🎉`);
+        setTimeout(() => setPaymentToast(null), 5000);
+
+        // Clear query parameters from URL cleanly
+        window.history.replaceState({}, document.title, window.location.pathname);
+      } else if (purchaseStatus === 'canceled') {
+        setPaymentToast('Payment was canceled. No charges were made.');
+        setTimeout(() => setPaymentToast(null), 4000);
+        window.history.replaceState({}, document.title, window.location.pathname);
+      }
+    }
   }, []);
 
   // Countdown timer when showPandaOverlay is active
@@ -151,6 +212,20 @@ export default function Home() {
           ))}
         </div>
       </div>
+
+      {/* Payment Notification Toast */}
+      {paymentToast && (
+        <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-bounce-slow max-w-md w-[90%] pointer-events-none">
+          <div className="bg-slate-900/95 border-2 border-emerald-400 p-4 rounded-2xl shadow-2xl flex items-center gap-3 backdrop-blur-xl text-white">
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/20 border border-emerald-400 flex items-center justify-center text-emerald-300 shrink-0">
+              <CheckCircle2 className="w-6 h-6" />
+            </div>
+            <div className="text-xs sm:text-sm font-black text-emerald-200">
+              {paymentToast}
+            </div>
+          </div>
+        </div>
+      )}
 
       <Navbar
         gameState={gameState}

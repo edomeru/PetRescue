@@ -9,6 +9,9 @@ import { MainGameScene } from '../game/scenes/MainGameScene';
 import { loadGameState, saveGameState, completeLevel, addCoins, addBoosters, GameState } from '../lib/gameState';
 import { soundFX } from '../game/audio/SoundFX';
 
+import { ShopModal } from './ShopModal';
+import { getLocalUserId, syncStateWithFirebase } from '../lib/firebase';
+
 export interface StageMascot {
   emoji: string;
   name: string;
@@ -59,6 +62,7 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
   const [countdown, setCountdown] = useState<number | null>(null);
   const [activeBuyBooster, setActiveBuyBooster] = useState<'hammer' | 'rocket' | 'colorBomb' | 'nuclear' | null>(null);
   const [buyBoosterNotice, setBuyBoosterNotice] = useState<string | null>(null);
+  const [isCoinShopOpen, setIsCoinShopOpen] = useState<boolean>(false);
 
   const BOOSTER_BUY_CONFIGS: Record<
     'hammer' | 'rocket' | 'colorBomb' | 'nuclear',
@@ -306,6 +310,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     updatedState.coins -= config.price;
     updatedState.boosters[config.key] = (updatedState.boosters[config.key] || 0) + 1;
     saveGameState(updatedState);
+    const userId = getLocalUserId();
+    syncStateWithFirebase(userId, updatedState);
     setGameState(updatedState);
     onStateUpdate();
 
@@ -798,6 +804,19 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
                   </span>
                 </button>
 
+                {/* Need more coins? Pay with Card button */}
+                {gameState.coins < config.price && (
+                  <button
+                    onClick={() => {
+                      soundFX.playClick();
+                      setIsCoinShopOpen(true);
+                    }}
+                    className="w-full mt-2.5 py-3 px-4 bg-gradient-to-r from-amber-500 via-orange-500 to-amber-600 hover:from-amber-400 hover:to-orange-500 text-slate-950 font-black text-xs rounded-xl shadow-lg border border-amber-300 flex items-center justify-center gap-2 animate-pulse"
+                  >
+                    <span>💳 Buy Coins with Credit Card (Stripe)</span>
+                  </button>
+                )}
+
                 {/* Use Booster immediately button if count > 0 */}
                 {count > 0 && (
                   <button
@@ -819,6 +838,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           );
         })()
       )}
+
+      {/* In-Game Coin Top-Up Shop Modal */}
+      <ShopModal
+        isOpen={isCoinShopOpen}
+        onClose={() => {
+          setIsCoinShopOpen(false);
+          setGameState(loadGameState());
+        }}
+        onStateUpdate={() => {
+          setGameState(loadGameState());
+          onStateUpdate();
+        }}
+        initialTab="coins"
+      />
     </div>
   );
 };

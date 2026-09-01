@@ -4,7 +4,7 @@ import Stripe from 'stripe';
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { itemId, priceInCents, title, description } = body;
+    const { itemId, priceInCents, title, description, userId, coinAmount } = body;
 
     const stripeKey = process.env.STRIPE_SECRET_KEY;
 
@@ -15,6 +15,7 @@ export async function POST(req: Request) {
           mode: 'sandbox',
           message: 'Stripe keys not configured. Falling back to Instant Sandbox Payment Simulator.',
           itemId,
+          coinAmount,
         },
         { status: 200 }
       );
@@ -33,8 +34,8 @@ export async function POST(req: Request) {
           price_data: {
             currency: 'usd',
             product_data: {
-              name: title || 'Pet Rescue Pack',
-              description: description || 'In-Game Item Purchase',
+              name: title || 'Pet Rescue Coin Pack',
+              description: description || 'In-Game Coins & Powerups',
             },
             unit_amount: priceInCents || 199,
           },
@@ -42,10 +43,12 @@ export async function POST(req: Request) {
         },
       ],
       mode: 'payment',
-      success_url: `${origin}/?purchase=success&itemId=${itemId}`,
+      success_url: `${origin}/?purchase=success&itemId=${encodeURIComponent(itemId || '')}&coins=${coinAmount || 0}`,
       cancel_url: `${origin}/?purchase=canceled`,
       metadata: {
-        itemId,
+        itemId: itemId || '',
+        userId: userId || '',
+        coinAmount: String(coinAmount || 0),
       },
     });
 

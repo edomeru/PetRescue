@@ -1,23 +1,28 @@
 'use client';
 
 import React, { useState } from 'react';
-import { X, Sparkles, ShieldCheck, Check, ShoppingBag, Zap, Crown, Flame, CreditCard } from 'lucide-react';
-import { loadGameState, addCoins, addBoosters, saveGameState, GameState } from '../lib/gameState';
+import { X, Sparkles, ShieldCheck, ShoppingBag, CreditCard, Coins, Zap, Crown, Flame } from 'lucide-react';
+import { loadGameState, saveGameState } from '../lib/gameState';
+import { getLocalUserId, syncStateWithFirebase } from '../lib/firebase';
 import { soundFX } from '../game/audio/SoundFX';
 
 interface ShopModalProps {
   isOpen: boolean;
   onClose: () => void;
   onStateUpdate: () => void;
+  initialTab?: 'coins' | 'packs';
 }
 
 export interface ShopItem {
   id: string;
+  category: 'coins' | 'packs';
   title: string;
   price: string;
   priceInCents: number;
   popular?: boolean;
+  bestValue?: boolean;
   description: string;
+  coinsAmount?: number;
   rewards: {
     coins?: number;
     hammers?: number;
@@ -28,58 +33,108 @@ export interface ShopItem {
     isVip?: boolean;
   };
   icon: string;
+  bgGradient: string;
 }
 
-const SHOP_ITEMS: ShopItem[] = [
+export const COIN_SHOP_ITEMS: ShopItem[] = [
   {
-    id: 'starter_pack',
-    title: 'Starter Saver Pack',
+    id: 'coins_500',
+    category: 'coins',
+    title: 'Pouch of Coins',
+    price: '$0.99',
+    priceInCents: 99,
+    coinsAmount: 500,
+    description: '+500 Gold Coins for boosters & pet care!',
+    rewards: { coins: 500 },
+    icon: '🪙',
+    bgGradient: 'from-amber-500/20 to-yellow-600/10 border-amber-400/40',
+  },
+  {
+    id: 'coins_1500',
+    category: 'coins',
+    title: 'Bag of Gold',
     price: '$1.99',
     priceInCents: 199,
     popular: true,
+    coinsAmount: 1500,
+    description: '+1,500 Gold Coins + bonus 300 coins included!',
+    rewards: { coins: 1500 },
+    icon: '💰',
+    bgGradient: 'from-amber-400/25 to-orange-500/15 border-amber-300/60',
+  },
+  {
+    id: 'coins_5000',
+    category: 'coins',
+    title: 'Treasure Vault',
+    price: '$4.99',
+    priceInCents: 499,
+    bestValue: true,
+    coinsAmount: 5000,
+    description: '+5,000 Gold Coins (Best Value for Serious Rescuers)',
+    rewards: { coins: 5000 },
+    icon: '👑',
+    bgGradient: 'from-purple-500/25 to-amber-500/20 border-purple-400/60',
+  },
+  {
+    id: 'starter_pack',
+    category: 'packs',
+    title: 'Starter Hero Bundle',
+    price: '$1.99',
+    priceInCents: 199,
+    popular: true,
+    coinsAmount: 500,
     description: '500 Coins + 3 Rockets + 🎀 Bow Accessory',
     rewards: { coins: 500, rockets: 3, accessory: 'bow' },
     icon: '📦',
+    bgGradient: 'from-indigo-500/20 to-purple-500/15 border-indigo-400/40',
+  },
+  {
+    id: 'booster_variety',
+    category: 'packs',
+    title: 'Ultimate Booster Box',
+    price: '$2.99',
+    priceInCents: 299,
+    coinsAmount: 800,
+    description: '800 Coins + 3 Hammers + 3 Rockets + 3 Color Bombs + 2 Nuclear Pandas',
+    rewards: { coins: 800, hammers: 3, rockets: 3, colorBombs: 3, shuffles: 2 },
+    icon: '⚡',
+    bgGradient: 'from-emerald-500/20 to-teal-500/15 border-emerald-400/40',
   },
   {
     id: 'vip_pass',
-    title: 'VIP Rescue Pass',
+    category: 'packs',
+    title: 'VIP Legend Pass',
     price: '$4.99',
     priceInCents: 499,
-    description: 'Unlock All Levels + 1,000 Coins + 👑 Crown',
+    bestValue: true,
+    coinsAmount: 1000,
+    description: 'Unlock All Levels 1-100 + 1,000 Coins + 👑 Royal Crown',
     rewards: { coins: 1000, isVip: true, accessory: 'crown' },
-    icon: '👑',
-  },
-  {
-    id: 'mega_chest',
-    title: 'Mega Coin Chest',
-    price: '$9.99',
-    priceInCents: 999,
-    description: '3,000 Coins + 10 Hammers + 10 Rockets + 👓 Glasses',
-    rewards: { coins: 3000, hammers: 10, rockets: 10, accessory: 'glasses' },
     icon: '💎',
-  },
-  {
-    id: 'booster_pack',
-    title: 'Booster Variety Box',
-    price: '$0.99',
-    priceInCents: 99,
-    description: '2 Hammers + 2 Rockets + 2 Color Bombs',
-    rewards: { hammers: 2, rockets: 2, colorBombs: 2, shuffles: 2 },
-    icon: '⚡',
+    bgGradient: 'from-amber-400/20 to-pink-500/20 border-amber-300/50',
   },
 ];
 
-export const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, onStateUpdate }) => {
+export const ShopModal: React.FC<ShopModalProps> = ({
+  isOpen,
+  onClose,
+  onStateUpdate,
+  initialTab = 'coins',
+}) => {
+  const [activeTab, setActiveTab] = useState<'coins' | 'packs'>(initialTab);
   const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   if (!isOpen) return null;
 
+  const currentItems = COIN_SHOP_ITEMS.filter((i) => i.category === activeTab);
+
   const handlePurchase = async (item: ShopItem) => {
     soundFX.playClick();
     setLoadingItemId(item.id);
     setSuccessMessage(null);
+
+    const userId = getLocalUserId();
 
     try {
       const response = await fetch('/api/checkout', {
@@ -90,6 +145,8 @@ export const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, onStateUp
           priceInCents: item.priceInCents,
           title: item.title,
           description: item.description,
+          userId,
+          coinAmount: item.coinsAmount || item.rewards.coins || 0,
         }),
       });
 
@@ -104,7 +161,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, onStateUp
           awardRewards(item);
           setLoadingItemId(null);
           soundFX.playVictory();
-          setSuccessMessage(`Purchased ${item.title}! Rewards added to inventory. 🎉`);
+          setSuccessMessage(`Purchased ${item.title}! Added to your inventory. 🎉`);
         }, 600);
       }
     } catch (err) {
@@ -113,7 +170,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, onStateUp
       awardRewards(item);
       setLoadingItemId(null);
       soundFX.playVictory();
-      setSuccessMessage(`Purchased ${item.title}! Rewards added to inventory. 🎉`);
+      setSuccessMessage(`Purchased ${item.title}! Added to your inventory. 🎉`);
     }
   };
 
@@ -132,102 +189,162 @@ export const ShopModal: React.FC<ShopModalProps> = ({ isOpen, onClose, onStateUp
 
     if (item.rewards.isVip) {
       state.isVip = true;
-      state.highestLevelUnlocked = 10; // Unlock all levels for VIP
+      state.highestLevelUnlocked = 100; // Unlock all levels for VIP
     }
 
     saveGameState(state);
+    const userId = getLocalUserId();
+    syncStateWithFirebase(userId, state);
     onStateUpdate();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-fade-in">
-      <div className="glass-modal w-full max-w-2xl rounded-3xl p-6 relative overflow-hidden shadow-2xl border border-white/20">
-        {/* Header */}
-        <div className="flex items-center justify-between pb-4 border-b border-white/10 mb-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-2xl bg-amber-400/20 flex items-center justify-center text-amber-300">
-              <ShoppingBag className="w-6 h-6" />
-            </div>
-            <div>
-              <h2 className="text-2xl font-black text-white flex items-center gap-2">
-                <span>In-Game Shop</span>
-                <span className="text-[10px] font-extrabold bg-indigo-500/20 text-indigo-300 px-2.5 py-0.5 rounded-full border border-indigo-400/30 uppercase tracking-wider">
-                  Stripe Enabled
-                </span>
-              </h2>
-              <p className="text-xs text-slate-400 font-medium">
-                One-time purchases to unlock powerups, accessories & levels!
-              </p>
-            </div>
-          </div>
+    <div
+      onPointerDown={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-md animate-fade-in"
+    >
+      <div className="glass-modal w-full max-w-2xl rounded-3xl p-6 relative overflow-hidden shadow-2xl border-2 border-amber-400/40 bg-slate-900/95 max-h-[92vh] flex flex-col justify-between">
+        {/* Background Ambient Glow */}
+        <div className="absolute w-72 h-72 bg-amber-500/10 rounded-full blur-3xl pointer-events-none -top-10 -left-10" />
+        <div className="absolute w-72 h-72 bg-purple-500/10 rounded-full blur-3xl pointer-events-none -bottom-10 -right-10" />
 
-          <button
-            onClick={() => {
-              soundFX.playClick();
-              onClose();
-            }}
-            className="p-2.5 bg-white/10 hover:bg-white/20 rounded-full transition text-slate-300"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Success Banner */}
-        {successMessage && (
-          <div className="mb-6 p-4 bg-emerald-500/20 border border-emerald-400/40 rounded-2xl text-emerald-300 font-bold text-sm text-center animate-bounce-slow">
-            {successMessage}
-          </div>
-        )}
-
-        {/* Shop Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-          {SHOP_ITEMS.map((item) => {
-            const isLoading = loadingItemId === item.id;
-
-            return (
-              <div
-                key={item.id}
-                className={`relative glass-panel rounded-2xl p-5 flex flex-col justify-between border transition hover:border-amber-400/50 ${
-                  item.popular ? 'bg-gradient-to-b from-amber-500/10 to-purple-500/10 border-amber-400/40' : 'border-white/10'
-                }`}
-              >
-                {item.popular && (
-                  <span className="absolute -top-3 right-4 bg-amber-400 text-slate-950 font-black text-[10px] uppercase px-3 py-0.5 rounded-full shadow">
-                    Most Popular
+        {/* Top Header */}
+        <div>
+          <div className="flex items-center justify-between pb-4 border-b border-white/10 mb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white shadow-lg">
+                <Coins className="w-7 h-7 drop-shadow" />
+              </div>
+              <div>
+                <h2 className="text-2xl font-black text-white flex items-center gap-2">
+                  <span>Coin & Booster Shop</span>
+                  <span className="text-[10px] font-extrabold bg-indigo-500/30 text-indigo-300 px-2.5 py-0.5 rounded-full border border-indigo-400/40 uppercase tracking-wider">
+                    💳 Stripe Powered
                   </span>
-                )}
+                </h2>
+                <p className="text-xs text-slate-300 font-medium">
+                  Instant coin top-up with credit card for boosters and pet accessories!
+                </p>
+              </div>
+            </div>
 
-                <div className="flex items-start gap-4 mb-3">
-                  <span className="text-4xl">{item.icon}</span>
+            <button
+              onClick={() => {
+                soundFX.playClick();
+                onClose();
+              }}
+              className="p-2.5 bg-slate-800 hover:bg-slate-700 rounded-full transition text-slate-300 hover:text-white border border-slate-700"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          {/* Tab Navigation */}
+          <div className="flex gap-2 mb-4 bg-slate-950/60 p-1 rounded-2xl border border-slate-800">
+            <button
+              onClick={() => {
+                soundFX.playClick();
+                setActiveTab('coins');
+              }}
+              className={`flex-1 py-2.5 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition ${
+                activeTab === 'coins'
+                  ? 'bg-gradient-to-r from-amber-500 to-yellow-500 text-slate-950 shadow-lg'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Coins className="w-4 h-4" />
+              <span>🪙 Buy Coins</span>
+            </button>
+
+            <button
+              onClick={() => {
+                soundFX.playClick();
+                setActiveTab('packs');
+              }}
+              className={`flex-1 py-2.5 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 transition ${
+                activeTab === 'packs'
+                  ? 'bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>📦 Booster Bundles</span>
+            </button>
+          </div>
+
+          {/* Success Banner */}
+          {successMessage && (
+            <div className="mb-4 p-3 bg-emerald-500/20 border border-emerald-400/40 rounded-2xl text-emerald-300 font-bold text-xs sm:text-sm text-center animate-bounce-slow flex items-center justify-center gap-2">
+              <Sparkles className="w-4 h-4 text-emerald-400" />
+              <span>{successMessage}</span>
+            </div>
+          )}
+
+          {/* Shop Items Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 overflow-y-auto max-h-[50vh] pr-1">
+            {currentItems.map((item) => {
+              const isLoading = loadingItemId === item.id;
+
+              return (
+                <div
+                  key={item.id}
+                  className={`relative rounded-2xl p-4 flex flex-col justify-between border-2 bg-gradient-to-b ${item.bgGradient} transition hover:scale-[1.02] shadow-xl backdrop-blur-sm`}
+                >
+                  {item.popular && (
+                    <span className="absolute -top-2.5 right-3 bg-gradient-to-r from-amber-400 to-orange-500 text-slate-950 font-black text-[9px] uppercase px-2.5 py-0.5 rounded-full shadow-lg border border-yellow-200">
+                      ★ Popular
+                    </span>
+                  )}
+                  {item.bestValue && (
+                    <span className="absolute -top-2.5 right-3 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-black text-[9px] uppercase px-2.5 py-0.5 rounded-full shadow-lg border border-purple-200">
+                      👑 Best Value
+                    </span>
+                  )}
+
                   <div>
-                    <h3 className="font-extrabold text-white text-base leading-tight mb-1">{item.title}</h3>
-                    <p className="text-xs text-slate-300 font-medium">{item.description}</p>
+                    <div className="flex items-center gap-2.5 mb-2">
+                      <span className="text-3xl drop-shadow">{item.icon}</span>
+                      <div>
+                        <h3 className="font-black text-white text-sm leading-tight">{item.title}</h3>
+                        {item.coinsAmount && (
+                          <span className="text-xs font-black text-yellow-300 drop-shadow flex items-center gap-1">
+                            +{item.coinsAmount} 🪙
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <p className="text-[11px] text-slate-300 font-semibold mb-3 leading-snug">
+                      {item.description}
+                    </p>
+                  </div>
+
+                  <div className="pt-2 border-t border-white/10 mt-auto flex items-center justify-between">
+                    <span className="text-lg font-black text-amber-300 drop-shadow">{item.price}</span>
+                    <button
+                      disabled={isLoading}
+                      onClick={() => handlePurchase(item)}
+                      className="px-3.5 py-2 bg-gradient-to-r from-amber-400 via-orange-400 to-amber-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-black text-xs rounded-xl flex items-center gap-1.5 shadow-md active:scale-95 disabled:opacity-50 transition"
+                    >
+                      <CreditCard className="w-3.5 h-3.5" />
+                      <span>{isLoading ? 'Loading...' : 'Pay Card'}</span>
+                    </button>
                   </div>
                 </div>
-
-                <div className="flex items-center justify-between pt-3 border-t border-white/10 mt-2">
-                  <span className="text-xl font-black text-amber-400">{item.price}</span>
-                  <button
-                    disabled={isLoading}
-                    onClick={() => handlePurchase(item)}
-                    className="btn-gold px-4 py-2 text-xs flex items-center gap-1.5 shadow-md disabled:opacity-50"
-                  >
-                    <CreditCard className="w-3.5 h-3.5" />
-                    {isLoading ? 'Processing...' : 'Buy Now'}
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })}
+          </div>
         </div>
 
-        {/* Sandbox Indicator */}
-        <div className="p-3 bg-slate-900/80 rounded-2xl border border-slate-800 flex items-center justify-between text-xs text-slate-400 font-medium">
+        {/* Bottom Guarantee Banner */}
+        <div className="mt-4 p-2.5 bg-slate-950/80 rounded-2xl border border-slate-800 flex items-center justify-between text-[11px] text-slate-400 font-medium">
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4 text-emerald-400" />
-            <span>Sandbox Mode Active: Instant purchase simulation enabled</span>
+            <span>Encrypted Stripe Checkout • Instant In-Game Delivery</span>
           </div>
-          <span className="text-[10px] text-slate-500 font-mono">No card required</span>
+          <span className="text-[10px] text-indigo-300 font-bold">Safe & Secure 🔒</span>
         </div>
       </div>
     </div>
