@@ -10,9 +10,9 @@ const outfit = Outfit({
 });
 
 export const metadata: Metadata = {
-  title: 'Pet Rescue | 3D Puzzle Game & Pet Sanctuary',
-  description: 'Play Pet Rescue - a fun 2D puzzle block matching game! Save cute pets, unlock power-ups, and customize your pet sanctuary lounge.',
-  keywords: ['pet rescue', 'puzzle game', 'phaser game', 'browser game', 'match 3', 'stripe game shop'],
+  title: 'Pawtora | 3D Puzzle Game & Pet Sanctuary',
+  description: 'Play Pawtora - a 3D puzzle and pet sanctuary game! Rescue cute pets, adopt and style them with accessories, and build your dream sanctuary.',
+  keywords: ['pawtora', 'pet sanctuary', 'puzzle game', 'virtual pet', 'adopt pet', 'phaser game', 'browser game'],
 };
 
 export default function RootLayout({

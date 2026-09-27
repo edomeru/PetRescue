@@ -305,3 +305,51 @@ body::before {
 .animate-music-note-2 {
   animation: floatMusicNote 2s ease-out infinite 0.9s;
 }
+
+/* ──────────────────────────────────────────── */
+/* Missing utility classes used across app      */
+/* ──────────────────────────────────────────── */
+
+/* Fade-in animation (used in modals, overlays) */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.97); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.25s ease-out forwards;
+}
+
+/* Bounce-slow (used in toasts, banners) */
+@keyframes bounceSlow {
+  0%, 100% { transform: translateY(0px); animation-timing-function: cubic-bezier(0.8,0,1,1); }
+  50%       { transform: translateY(-10px); animation-timing-function: cubic-bezier(0,0,0.2,1); }
+}
+
+.animate-bounce-slow {
+  animation: bounceSlow 2s infinite;
+}
+
+/* Float animation (used on pet cards) */
+@keyframes floatPet {
+  0%, 100% { transform: translateY(0px); }
+  50%       { transform: translateY(-6px); }
+}
+
+.animate-float {
+  animation: floatPet 3s ease-in-out infinite;
+}
+
+/* Scale-102 (used on selected tabs) */
+.scale-102 {
+  transform: scale(1.02);
+}
+
+/* Scrollbar none (used on world tab scroll area) */
+.scrollbar-none {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}

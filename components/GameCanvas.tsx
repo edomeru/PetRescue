@@ -326,8 +326,20 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
     return null;
   };
 
+  useEffect(() => {
+    if (isCoinShopOpen) {
+      getScene()?.saveBoardState();
+    }
+  }, [isCoinShopOpen]);
+
   const handleRestart = () => {
     soundFX.playClick();
+    getScene()?.clearSavedBoardState();
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.removeItem(`pet_rescue_saved_board_${levelNumber}`);
+      } catch (e) {}
+    }
     setIsGameOver(false);
     setIsVictory(false);
     setScore(0);
@@ -351,6 +363,12 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
         <button
           onClick={() => {
             soundFX.playClick();
+            getScene()?.clearSavedBoardState();
+            if (typeof window !== 'undefined') {
+              try {
+                localStorage.removeItem(`pet_rescue_saved_board_${levelNumber}`);
+              } catch (e) {}
+            }
             onBackToMap();
           }}
           className="flex items-center gap-2 px-4 py-2.5 bg-slate-800/90 hover:bg-slate-700/90 rounded-full font-black transition text-sm text-white border border-slate-600 shadow-md active:scale-95"
@@ -851,6 +869,8 @@ export const GameCanvas: React.FC<GameCanvasProps> = ({
           onStateUpdate();
         }}
         initialTab="coins"
+        returnTab="game"
+        returnLevel={levelNumber}
       />
     </div>
   );

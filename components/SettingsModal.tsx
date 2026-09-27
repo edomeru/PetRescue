@@ -63,7 +63,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, o
         </div>
 
         <div className="text-center text-[10px] text-slate-500 font-semibold border-t border-white/10 pt-4">
-          Pet Rescue Web App Game • Built with Next.js & Phaser 3
+          Pawtora Web App Game • Built with Next.js & Phaser 3
         </div>
       </div>
     </div>

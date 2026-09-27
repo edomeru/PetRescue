@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Heart, Volume2, VolumeX, ShoppingBag, Map, Sparkles, Settings } from 'lucide-react';
 import { GameState } from '../lib/gameState';
 import { soundFX } from '../game/audio/SoundFX';
@@ -22,6 +22,14 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenSettings,
   onStateUpdate,
 }) => {
+  // Defer client-only values to avoid SSR/hydration mismatch
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => { setMounted(true); }, []);
+
+  const rescuedCount = mounted ? gameState.rescuedPets.length : 0;
+  const coins = mounted ? gameState.coins : 0;
+  const soundEnabled = mounted ? gameState.soundEnabled : true;
+
   const toggleSound = () => {
     const newState = !gameState.soundEnabled;
     soundFX.setSoundEnabled(newState);
@@ -45,7 +53,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
           <div>
             <span className="font-black text-xl text-white tracking-tight leading-none block">
-              Pet Rescue <span className="text-pink-400 font-extrabold text-sm">3D</span>
+              Pawtora <span className="text-pink-400 font-extrabold text-sm">3D</span>
             </span>
             <span className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
               Puzzle & Sanctuary
@@ -80,7 +88,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 : 'text-slate-300 hover:text-white hover:bg-white/10'
             }`}
           >
-            <Heart className="w-3.5 h-3.5 fill-current" /> Sanctuary ({gameState.rescuedPets.length})
+            <Heart className="w-3.5 h-3.5 fill-current" /> Sanctuary ({rescuedCount})
           </button>
         </nav>
 
@@ -89,7 +97,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           {/* Lives Counter */}
           <div className="flex items-center gap-1.5 bg-rose-500/20 border border-rose-500/30 px-3 py-1.5 rounded-full text-rose-300 text-xs font-black">
             <Heart className="w-3.5 h-3.5 fill-rose-400 text-rose-400" />
-            <span>{gameState.lives} / {gameState.maxLives}</span>
+            <span>{mounted ? gameState.lives : 0} / {mounted ? gameState.maxLives : 0}</span>
           </div>
 
           {/* Coins Badge */}
@@ -100,7 +108,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             }}
             className="flex items-center gap-1.5 bg-amber-400/20 border border-amber-400/30 hover:bg-amber-400/30 px-3.5 py-1.5 rounded-full text-amber-300 text-xs font-black transition cursor-pointer"
           >
-            <span>🪙 {gameState.coins}</span>
+            <span>🪙 {coins}</span>
             <Sparkles className="w-3 h-3 text-amber-300" />
           </button>
 
@@ -110,7 +118,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="p-2 bg-white/10 hover:bg-white/20 rounded-full transition text-slate-300"
             title="Toggle Sound"
           >
-            {gameState.soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
+            {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4 text-slate-500" />}
           </button>
 
           {/* Settings */}

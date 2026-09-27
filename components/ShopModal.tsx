@@ -11,6 +11,8 @@ interface ShopModalProps {
   onClose: () => void;
   onStateUpdate: () => void;
   initialTab?: 'coins' | 'packs';
+  returnTab?: 'map' | 'sanctuary' | 'game';
+  returnLevel?: number;
 }
 
 export interface ShopItem {
@@ -35,6 +37,144 @@ export interface ShopItem {
   icon: string;
   bgGradient: string;
 }
+
+// ─── Accessory catalog (used both by ShopModal AND PetSanctuary direct-buy) ───
+export interface AccessoryItem {
+  id: string;
+  name: string;
+  emoji: string;
+  priceInCents: number;
+  price: string;
+  description: string;
+  isFree?: boolean;
+  gradient: string;
+  rarity: 'free' | 'common' | 'rare' | 'legendary';
+}
+
+export const ACCESSORY_CATALOG: AccessoryItem[] = [
+  {
+    id: 'none',
+    name: 'None',
+    emoji: '🚫',
+    priceInCents: 0,
+    price: 'Free',
+    description: 'No accessory equipped',
+    isFree: true,
+    gradient: 'from-slate-700/40 to-slate-800/40 border-slate-600/40',
+    rarity: 'free',
+  },
+  {
+    id: 'bow',
+    name: 'Bow',
+    emoji: '🎀',
+    priceInCents: 0,
+    price: 'Free',
+    description: 'A cute ribbon bow, free for all pets!',
+    isFree: true,
+    gradient: 'from-pink-500/20 to-rose-500/15 border-pink-400/40',
+    rarity: 'free',
+  },
+  {
+    id: 'hat',
+    name: 'Top Hat',
+    emoji: '🎩',
+    priceInCents: 99,
+    price: '$0.99',
+    description: 'A dapper top hat for a distinguished look',
+    gradient: 'from-slate-600/30 to-slate-700/20 border-slate-500/50',
+    rarity: 'common',
+  },
+  {
+    id: 'glasses',
+    name: 'Glasses',
+    emoji: '👓',
+    priceInCents: 99,
+    price: '$0.99',
+    description: 'Smart round glasses for a nerdy-cute vibe',
+    gradient: 'from-amber-500/20 to-yellow-600/15 border-amber-400/40',
+    rarity: 'common',
+  },
+  {
+    id: 'sunglasses',
+    name: 'Sunglasses',
+    emoji: '🕶️',
+    priceInCents: 149,
+    price: '$1.49',
+    description: 'Cool shades for the trendiest pets on the block',
+    gradient: 'from-blue-500/20 to-cyan-500/15 border-blue-400/40',
+    rarity: 'common',
+  },
+  {
+    id: 'tshirt',
+    name: 'T-Shirt',
+    emoji: '👕',
+    priceInCents: 99,
+    price: '$0.99',
+    description: 'A comfy graphic tee for casual pet fashion',
+    gradient: 'from-emerald-500/20 to-teal-500/15 border-emerald-400/40',
+    rarity: 'common',
+  },
+  {
+    id: 'jacket',
+    name: 'Jacket',
+    emoji: '🧥',
+    priceInCents: 199,
+    price: '$1.99',
+    description: 'A stylish leather jacket for the cool pets',
+    gradient: 'from-orange-500/25 to-red-500/15 border-orange-400/50',
+    rarity: 'rare',
+  },
+  {
+    id: 'hoodie',
+    name: 'Hoodie',
+    emoji: '🧤',
+    priceInCents: 149,
+    price: '$1.49',
+    description: 'A cozy hoodie for the comfiest pet vibes',
+    gradient: 'from-violet-500/20 to-purple-500/15 border-violet-400/40',
+    rarity: 'common',
+  },
+  {
+    id: 'shoes',
+    name: 'Sneakers',
+    emoji: '👟',
+    priceInCents: 99,
+    price: '$0.99',
+    description: 'Sporty sneakers for the most athletic pets',
+    gradient: 'from-lime-500/20 to-green-500/15 border-lime-400/40',
+    rarity: 'common',
+  },
+  {
+    id: 'scarf',
+    name: 'Scarf',
+    emoji: '🧣',
+    priceInCents: 149,
+    price: '$1.49',
+    description: 'A warm cozy scarf for chilly sanctuary days',
+    gradient: 'from-red-500/20 to-rose-500/15 border-red-400/40',
+    rarity: 'common',
+  },
+  {
+    id: 'cape',
+    name: 'Hero Cape',
+    emoji: '🦸',
+    priceInCents: 299,
+    price: '$2.99',
+    description: 'Every rescued hero deserves a magnificent cape!',
+    gradient: 'from-purple-500/25 to-indigo-500/20 border-purple-400/60',
+    rarity: 'rare',
+  },
+  {
+    id: 'crown',
+    name: 'Royal Crown',
+    emoji: '👑',
+    priceInCents: 399,
+    price: '$3.99',
+    description: 'The most regal accessory for the most special pets',
+    gradient: 'from-amber-400/30 to-yellow-400/20 border-amber-300/70',
+    rarity: 'legendary',
+  },
+];
 
 export const COIN_SHOP_ITEMS: ShopItem[] = [
   {
@@ -113,6 +253,20 @@ export const COIN_SHOP_ITEMS: ShopItem[] = [
     icon: '💎',
     bgGradient: 'from-amber-400/20 to-pink-500/20 border-amber-300/50',
   },
+  // ─── Accessory purchase items (resolved on Stripe return by itemId) ───
+  ...ACCESSORY_CATALOG
+    .filter((a) => !a.isFree)
+    .map((a) => ({
+      id: `accessory_${a.id}`,
+      category: 'packs' as const,
+      title: `${a.emoji} ${a.name}`,
+      price: a.price,
+      priceInCents: a.priceInCents,
+      description: a.description,
+      rewards: { accessory: a.id },
+      icon: a.emoji,
+      bgGradient: a.gradient,
+    })),
 ];
 
 export const ShopModal: React.FC<ShopModalProps> = ({
@@ -120,6 +274,8 @@ export const ShopModal: React.FC<ShopModalProps> = ({
   onClose,
   onStateUpdate,
   initialTab = 'coins',
+  returnTab = 'map',
+  returnLevel = 1,
 }) => {
   const [activeTab, setActiveTab] = useState<'coins' | 'packs'>(initialTab);
   const [loadingItemId, setLoadingItemId] = useState<string | null>(null);
@@ -136,6 +292,20 @@ export const ShopModal: React.FC<ShopModalProps> = ({
 
     const userId = getLocalUserId();
 
+    // Persist pending context in localStorage so returning from Stripe restores exact tab & level
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(
+          'pet_rescue_stripe_pending',
+          JSON.stringify({
+            returnTab,
+            returnLevel,
+            timestamp: Date.now(),
+          })
+        );
+      } catch (e) {}
+    }
+
     try {
       const response = await fetch('/api/checkout', {
         method: 'POST',
@@ -147,6 +317,8 @@ export const ShopModal: React.FC<ShopModalProps> = ({
           description: item.description,
           userId,
           coinAmount: item.coinsAmount || item.rewards.coins || 0,
+          returnTab,
+          returnLevel,
         }),
       });
 
@@ -157,6 +329,11 @@ export const ShopModal: React.FC<ShopModalProps> = ({
         window.location.href = data.url;
       } else {
         // Instant Sandbox Simulator (awards items immediately for local testing)
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.removeItem('pet_rescue_stripe_pending');
+          } catch (e) {}
+        }
         setTimeout(() => {
           awardRewards(item);
           setLoadingItemId(null);
@@ -167,6 +344,11 @@ export const ShopModal: React.FC<ShopModalProps> = ({
     } catch (err) {
       console.error('Purchase error:', err);
       // Fallback award in sandbox mode
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.removeItem('pet_rescue_stripe_pending');
+        } catch (e) {}
+      }
       awardRewards(item);
       setLoadingItemId(null);
       soundFX.playVictory();

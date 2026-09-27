@@ -322,7 +322,10 @@ export class MainGameScene extends Phaser.Scene {
     }
 
     this.createMaskedPetTextures();
-    this.setupGrid();
+    const restored = this.restoreSavedGrid();
+    if (!restored) {
+      this.setupGrid();
+    }
     this.notifyState();
     
     // Activate game audio & background music
@@ -1159,6 +1162,36 @@ export class MainGameScene extends Phaser.Scene {
 
   private executeBooster(tile: TileData) {
     if (!this.activeBooster) return;
+
+    // ── Pet tiles are NEVER destroyed by boosters ──
+    // Boosters should only hit color / ice / cage / chocolate tiles.
+    // If the player clicks a pet tile, cancel the action silently,
+    // keep the booster active, and show a warning toast.
+    if (tile.type === 'pet') {
+      this.isProcessing = false;
+      this.activeBooster = this.activeBooster; // keep it active so the player can retry
+
+      // Show a quick "Can't hit pets!" warning near the clicked tile
+      const warnX = this.offsetX + tile.gridX * this.tileSize + this.tileSize / 2;
+      const warnY = this.offsetY + tile.gridY * this.tileSize - 10;
+      const warnText = this.add.text(warnX, warnY, "Can't hit pets! 🐾", {
+        fontSize: '13px',
+        color: '#fde047',
+        fontStyle: 'bold',
+        stroke: '#0f172a',
+        strokeThickness: 3,
+      }).setOrigin(0.5).setDepth(80);
+      this.tweens.add({
+        targets: warnText,
+        y: warnY - 30,
+        alpha: { from: 1, to: 0 },
+        duration: 1400,
+        ease: 'Quad.easeOut',
+        onComplete: () => warnText.destroy(),
+      });
+      return;
+    }
+
     this.isProcessing = true;
     soundFX.playBooster();
 
@@ -1170,7 +1203,7 @@ export class MainGameScene extends Phaser.Scene {
     }
 
     if (bType === 'hammer') {
-      // Destroy single tile (1 coin) with VFX
+      // Destroy single tile (1 coin) with VFX — pet tiles are already blocked above
       const tx = this.offsetX + tile.gridX * this.tileSize + this.tileSize / 2;
       const ty = this.offsetY + tile.gridY * this.tileSize + this.tileSize / 2;
 
@@ -1908,6 +1941,12 @@ export class MainGameScene extends Phaser.Scene {
   }
 
   private notifyState(isGameOver = false, isVictory = false) {
+    if (isGameOver || isVictory) {
+      this.clearSavedBoardState();
+    } else if (this.movesLeft > 0) {
+      this.saveBoardState();
+    }
+
     if (this.onGameStateChange) {
       this.onGameStateChange({
         score: this.score,
@@ -1917,6 +1956,96 @@ export class MainGameScene extends Phaser.Scene {
         isGameOver,
         isVictory,
       });
+    }
+  }
+
+  public saveBoardState() {
+    if (typeof window === 'undefined') return;
+    if (this.movesLeft <= 0) {
+      this.clearSavedBoardState();
+      return;
+    }
+    try {
+      const serialized = {
+        level: this.config.level,
+        score: this.score,
+        movesLeft: this.movesLeft,
+        petsRescued: this.petsRescued,
+        grid: this.grid.map((row) =>
+          row.map((t) =>
+            t
+              ? {
+                  id: t.id,
+                  type: t.type,
+                  colorIndex: t.colorIndex,
+                  petType: t.petType,
+                  gridX: t.gridX,
+                  gridY: t.gridY,
+                  isObstacle: t.isObstacle,
+                }
+              : null
+          )
+        ),
+        timestamp: Date.now(),
+      };
+      localStorage.setItem(`pet_rescue_saved_board_${this.config.level}`, JSON.stringify(serialized));
+    } catch (e) {
+      console.warn('Failed to save in-progress board:', e);
+    }
+  }
+
+  public clearSavedBoardState() {
+    if (typeof window === 'undefined') return;
+    try {
+      localStorage.removeItem(`pet_rescue_saved_board_${this.config.level}`);
+    } catch (e) {}
+  }
+
+  private restoreSavedGrid(): boolean {
+    if (typeof window === 'undefined') return false;
+    try {
+      const raw = localStorage.getItem(`pet_rescue_saved_board_${this.config.level}`);
+      if (!raw) return false;
+      const data = JSON.parse(raw);
+      if (!data || data.level !== this.config.level || !data.grid || data.movesLeft <= 0) {
+        return false;
+      }
+      // If older than 24 hours, discard
+      if (Date.now() - (data.timestamp || 0) > 24 * 60 * 60 * 1000) {
+        this.clearSavedBoardState();
+        return false;
+      }
+
+      this.score = data.score || 0;
+      this.movesLeft = data.movesLeft;
+      this.petsRescued = data.petsRescued || 0;
+
+      this.grid = [];
+      for (let r = 0; r < data.grid.length; r++) {
+        this.grid[r] = [];
+        for (let c = 0; c < data.grid[r].length; c++) {
+          const t = data.grid[r][c];
+          if (t) {
+            const tileData: TileData = {
+              id: t.id || `tile_${r}_${c}_${Date.now()}`,
+              type: t.type,
+              colorIndex: t.colorIndex,
+              petType: t.petType,
+              gridX: c,
+              gridY: r,
+              isObstacle: t.isObstacle,
+            };
+            this.grid[r][c] = tileData;
+            this.renderTile(tileData);
+          } else {
+            this.grid[r][c] = null;
+          }
+        }
+      }
+      return true;
+    } catch (e) {
+      console.warn('Failed to restore board:', e);
+      return false;
     }
   }
 }

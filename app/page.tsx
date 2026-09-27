@@ -10,7 +10,7 @@ import { SettingsModal } from '../components/SettingsModal';
 import { loadGameState, saveGameState, setCurrentLevel, GameState } from '../lib/gameState';
 import { getWorldForLevel } from '../game/levelConfigs';
 import { initFirebaseAnonymousAuth, loadStateFromFirebase, syncStateWithFirebase, getLocalUserId } from '../lib/firebase';
-import { COIN_SHOP_ITEMS } from '../components/ShopModal';
+import { COIN_SHOP_ITEMS, ACCESSORY_CATALOG } from '../components/ShopModal';
 import confetti from 'canvas-confetti';
 
 import { Sparkles, CheckCircle2 } from 'lucide-react';
@@ -40,6 +40,7 @@ export default function Home() {
   const [showPandaOverlay, setShowPandaOverlay] = useState<boolean>(false);
   const [autoCountdown, setAutoCountdown] = useState<number>(3);
   const [paymentToast, setPaymentToast] = useState<string | null>(null);
+  const [sanctuaryTab, setSanctuaryTab] = useState<'yard' | 'mypets'>('yard');
 
   const [isShopOpen, setIsShopOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -47,8 +48,42 @@ export default function Home() {
   useEffect(() => {
     let current = loadGameState();
     setGameState(current);
-    setSelectedLevel(current.currentLevel || 1);
-    setActiveTab('map');
+
+    // Determine target screen and level (default: map, or game if returning from Stripe / in-game shop)
+    let targetTab: 'map' | 'sanctuary' | 'game' = 'map';
+    let targetLevel: number = current.currentLevel || 1;
+
+    // Check query params & stored pending Stripe checkout session
+    let storedPending: { returnTab?: 'map' | 'sanctuary' | 'game'; returnLevel?: number; returnPetId?: string } | null = null;
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const purchaseStatus = params.get('purchase');
+      const tabParam = params.get('tab');
+      const levelParam = params.get('level');
+
+      try {
+        const rawPending = localStorage.getItem('pet_rescue_stripe_pending');
+        if (rawPending) {
+          storedPending = JSON.parse(rawPending);
+          localStorage.removeItem('pet_rescue_stripe_pending');
+        }
+      } catch (e) {}
+
+      const destTab = (tabParam as 'map' | 'sanctuary' | 'game') || (purchaseStatus ? storedPending?.returnTab : undefined);
+      const destLevel = Number(levelParam || (purchaseStatus ? storedPending?.returnLevel : 0) || 0);
+
+      if (destTab === 'game') {
+        targetTab = 'game';
+        if (destLevel > 0) targetLevel = destLevel;
+        setShowPandaOverlay(false);
+      } else if (destTab === 'sanctuary') {
+        targetTab = 'sanctuary';
+        setShowPandaOverlay(false);
+      }
+    }
+
+    setSelectedLevel(targetLevel);
+    setActiveTab(targetTab);
     setMounted(true);
 
     // 1. Initialize Firebase Anonymous Auth & Sync
@@ -66,14 +101,71 @@ export default function Home() {
       const params = new URLSearchParams(window.location.search);
       const purchaseStatus = params.get('purchase');
       const itemId = params.get('itemId');
+      const petIdParam = params.get('petId');
       const coinsParam = Number(params.get('coins') || 0);
 
       if (purchaseStatus === 'success') {
         const item = COIN_SHOP_ITEMS.find((i) => i.id === itemId);
-        const coinsToAdd = coinsParam || item?.coinsAmount || item?.rewards?.coins || 500;
+        const coinsToAdd = coinsParam || item?.coinsAmount || item?.rewards?.coins || 0;
 
         const updated = { ...loadGameState() };
-        updated.coins += coinsToAdd;
+        if (coinsToAdd > 0) {
+          updated.coins += coinsToAdd;
+        }
+
+        // Check if pet adoption
+        let isPetAdoption = false;
+        let adoptedPetName = '';
+        if (itemId?.startsWith('pet_adopt_') || petIdParam) {
+          const petIdToAdopt = petIdParam || (itemId ? itemId.replace('pet_adopt_', '') : '');
+          if (petIdToAdopt) {
+            isPetAdoption = true;
+            if (!updated.boughtPetIds) updated.boughtPetIds = [];
+            if (!updated.boughtPetIds.includes(petIdToAdopt)) {
+              updated.boughtPetIds.push(petIdToAdopt);
+            }
+            const foundPet = updated.rescuedPets.find((p) => p.id === petIdToAdopt);
+            if (foundPet) {
+              foundPet.happiness = 100;
+              adoptedPetName = foundPet.name;
+            }
+            setActiveTab('sanctuary');
+            setSanctuaryTab('mypets');
+          }
+        }
+
+        // Check if accessory purchase
+        let isAccessoryPurchase = false;
+        let accessoryName = '';
+        if (itemId?.startsWith('accessory_')) {
+          const accId = itemId.replace('accessory_', '');
+          if (accId) {
+            if (!updated.unlockedAccessories.includes(accId)) {
+              updated.unlockedAccessories.push(accId);
+            }
+            isAccessoryPurchase = true;
+            // Get nice name and emoji from ACCESSORY_CATALOG
+            const matchedAcc = ACCESSORY_CATALOG.find((a) => a.id === accId || `accessory_${a.id}` === itemId);
+            accessoryName = matchedAcc ? `${matchedAcc.emoji} ${matchedAcc.name}` : accId;
+
+            // Auto-equip on target pet if available
+            const targetPetId = petIdParam || storedPending?.returnPetId;
+            if (targetPetId) {
+              const targetPet = updated.rescuedPets.find((p) => p.id === targetPetId);
+              if (targetPet) {
+                if (!Array.isArray(targetPet.accessories)) {
+                  targetPet.accessories = targetPet.accessory && targetPet.accessory !== 'none' ? [targetPet.accessory] : [];
+                }
+                if (!targetPet.accessories.includes(accId)) {
+                  targetPet.accessories.push(accId);
+                }
+                targetPet.accessory = accId;
+              }
+            }
+
+            setActiveTab('sanctuary');
+          }
+        }
 
         if (item) {
           if (item.rewards.hammers) updated.boosters.hammers += item.rewards.hammers;
@@ -97,7 +189,13 @@ export default function Home() {
         // Celebration
         soundFX.playVictory();
         confetti({ particleCount: 100, spread: 80, origin: { y: 0.5 } });
-        setPaymentToast(`Payment Successful! +${coinsToAdd} 🪙 Coins Added to Inventory! 🎉`);
+        if (isPetAdoption) {
+          setPaymentToast(`Adoption Successful! 💖 ${adoptedPetName || 'Your new pet'} is now in "My Pets"! 🎉`);
+        } else if (isAccessoryPurchase) {
+          setPaymentToast(`Accessory Unlocked! ${accessoryName} is now available in the Sanctuary! ✨`);
+        } else {
+          setPaymentToast(`Payment Successful! +${coinsToAdd} 🪙 Coins Added to Inventory! 🎉`);
+        }
         setTimeout(() => setPaymentToast(null), 5000);
 
         // Clear query parameters from URL cleanly
@@ -132,6 +230,10 @@ export default function Home() {
   };
 
   const handleSelectLevel = (level: number) => {
+    // Players cannot go back to previous levels/stages
+    if (gameState.highestLevelUnlocked && level < gameState.highestLevelUnlocked) {
+      return;
+    }
     setShowPandaOverlay(false);
     const updated = setCurrentLevel(level);
     setGameState(updated);
@@ -247,6 +349,7 @@ export default function Home() {
           <PetSanctuary
             onBackToMap={() => setActiveTab('map')}
             onStateUpdate={refreshGameState}
+            initialTab={sanctuaryTab}
           />
         ) : (
           <DynamicGameCanvas
@@ -260,7 +363,7 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="w-full py-4 text-center text-xs text-slate-300 font-semibold border-t border-white/10 relative z-20 backdrop-blur-md bg-emerald-950/30">
-        Pet Rescue Web Game • Powered by Next.js & Phaser 3 Engine
+        Pawtora Web Game • Powered by Next.js & Phaser 3 Engine
       </footer>
 
       {/* Modals */}
@@ -268,6 +371,8 @@ export default function Home() {
         isOpen={isShopOpen}
         onClose={() => setIsShopOpen(false)}
         onStateUpdate={refreshGameState}
+        returnTab={activeTab}
+        returnLevel={selectedLevel}
       />
 
       <SettingsModal
@@ -417,6 +522,7 @@ function INITIAL_LOAD(): GameState {
       levelScores: { 1: 0 },
       boosters: { hammers: 2, rockets: 2, colorBombs: 1, shuffles: 3 },
       rescuedPets: [],
+      boughtPetIds: [],
       unlockedAccessories: ['none', 'bow'],
       isVip: false,
       soundEnabled: true,
