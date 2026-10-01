@@ -5,6 +5,7 @@ import { X, Sparkles, ShieldCheck, ShoppingBag, CreditCard, Coins, Zap, Crown, F
 import { loadGameState, saveGameState } from '../lib/gameState';
 import { getLocalUserId, syncStateWithFirebase } from '../lib/firebase';
 import { soundFX } from '../game/audio/SoundFX';
+import { prepareCheckoutWindow, navigateToCheckout, closeCheckoutWindow } from '../lib/checkout';
 
 interface ShopModalProps {
   isOpen: boolean;
@@ -287,6 +288,8 @@ export const ShopModal: React.FC<ShopModalProps> = ({
 
   const handlePurchase = async (item: ShopItem) => {
     soundFX.playClick();
+    // Prepare checkout popup window immediately on click if running in an iframe (e.g. GameJolt)
+    const checkoutWindow = prepareCheckoutWindow();
     setLoadingItemId(item.id);
     setSuccessMessage(null);
 
@@ -325,9 +328,11 @@ export const ShopModal: React.FC<ShopModalProps> = ({
       const data = await response.json();
 
       if (data.mode === 'stripe' && data.url) {
-        // Redirect to real Stripe Hosted Checkout session
-        window.location.href = data.url;
+        // Redirect to real Stripe Hosted Checkout session safely (navigates popup if in iframe)
+        navigateToCheckout(data.url, checkoutWindow);
+        setLoadingItemId(null);
       } else {
+        closeCheckoutWindow(checkoutWindow);
         // Instant Sandbox Simulator (awards items immediately for local testing)
         if (typeof window !== 'undefined') {
           try {
@@ -343,6 +348,7 @@ export const ShopModal: React.FC<ShopModalProps> = ({
       }
     } catch (err) {
       console.error('Purchase error:', err);
+      closeCheckoutWindow(checkoutWindow);
       // Fallback award in sandbox mode
       if (typeof window !== 'undefined') {
         try {

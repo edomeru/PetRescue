@@ -7,6 +7,7 @@ import { soundFX } from '../game/audio/SoundFX';
 import { PetAvatar, getPetBreed } from './PetAvatar';
 import { PetFullBody } from './PetFullBody';
 import { ACCESSORY_CATALOG, AccessoryItem } from './ShopModal';
+import { prepareCheckoutWindow, navigateToCheckout, closeCheckoutWindow } from '../lib/checkout';
 
 interface PetSanctuaryProps {
   onBackToMap: () => void;
@@ -53,6 +54,7 @@ export const PetSanctuary: React.FC<PetSanctuaryProps> = ({
 
   const handleBuyPet = async (pet: PetData) => {
     if (!pet) return;
+    const checkoutWindow = prepareCheckoutWindow();
     try {
       setIsAdopting(true);
       soundFX.playClick();
@@ -81,6 +83,7 @@ export const PetSanctuary: React.FC<PetSanctuaryProps> = ({
       const data = await res.json();
 
       if (data.mode === 'sandbox') {
+        closeCheckoutWindow(checkoutWindow);
         soundFX.playVictory();
         const updated = buyPet(pet.id);
         setGameState(updated);
@@ -88,19 +91,23 @@ export const PetSanctuary: React.FC<PetSanctuaryProps> = ({
         setActiveTab('mypets');
         setIsAdopting(false);
       } else if (data.url) {
-        window.location.href = data.url;
+        navigateToCheckout(data.url, checkoutWindow);
+        setIsAdopting(false);
       } else {
+        closeCheckoutWindow(checkoutWindow);
         alert('Checkout error. Please try again.');
         setIsAdopting(false);
       }
     } catch (e) {
       console.error('Adoption error:', e);
+      closeCheckoutWindow(checkoutWindow);
       setIsAdopting(false);
     }
   };
 
   const handleBuyAccessory = async (acc: AccessoryItem) => {
     if (!selectedPet) return;
+    const checkoutWindow = prepareCheckoutWindow();
     try {
       setIsAdopting(true);
       soundFX.playClick();
@@ -128,6 +135,7 @@ export const PetSanctuary: React.FC<PetSanctuaryProps> = ({
       const data = await res.json();
 
       if (data.mode === 'sandbox') {
+        closeCheckoutWindow(checkoutWindow);
         soundFX.playVictory();
         const updated = loadGameState();
         if (!updated.unlockedAccessories.includes(acc.id)) {
@@ -150,13 +158,16 @@ export const PetSanctuary: React.FC<PetSanctuaryProps> = ({
         onStateUpdate();
         setIsAdopting(false);
       } else if (data.url) {
-        window.location.href = data.url;
+        navigateToCheckout(data.url, checkoutWindow);
+        setIsAdopting(false);
       } else {
+        closeCheckoutWindow(checkoutWindow);
         alert('Checkout error. Please try again.');
         setIsAdopting(false);
       }
     } catch (e) {
       console.error('Accessory purchase error:', e);
+      closeCheckoutWindow(checkoutWindow);
       setIsAdopting(false);
     }
   };

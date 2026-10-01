@@ -205,6 +205,21 @@ export default function Home() {
         setTimeout(() => setPaymentToast(null), 4000);
         window.history.replaceState({}, document.title, window.location.pathname);
       }
+
+      // Multi-tab sync: When a player finishes Stripe Checkout in a popup/new tab,
+      // the GameJolt/embedded window receives the 'storage' event and automatically updates coins/pets!
+      const handleStorage = (event: StorageEvent) => {
+        if (event.key === 'pet_rescue_game_state' && event.newValue) {
+          try {
+            const fresh = JSON.parse(event.newValue);
+            setGameState(fresh);
+          } catch {}
+        }
+      };
+      window.addEventListener('storage', handleStorage);
+      return () => {
+        window.removeEventListener('storage', handleStorage);
+      };
     }
   }, []);
 
