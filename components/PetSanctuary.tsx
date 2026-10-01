@@ -8,6 +8,7 @@ import { PetAvatar, getPetBreed } from './PetAvatar';
 import { PetFullBody } from './PetFullBody';
 import { ACCESSORY_CATALOG, AccessoryItem } from './ShopModal';
 import { prepareCheckoutWindow, navigateToCheckout, closeCheckoutWindow } from '../lib/checkout';
+import { isFBInstantEnvironment, purchaseViaFBInstant } from '../lib/fbinstant';
 
 interface PetSanctuaryProps {
   onBackToMap: () => void;
@@ -54,6 +55,31 @@ export const PetSanctuary: React.FC<PetSanctuaryProps> = ({
 
   const handleBuyPet = async (pet: PetData) => {
     if (!pet) return;
+
+    // 1. Facebook Instant Games In-App Purchases
+    if (isFBInstantEnvironment()) {
+      setIsAdopting(true);
+      soundFX.playClick();
+      try {
+        const fbRes = await purchaseViaFBInstant(`pet_adopt_${pet.id}`, 'guest');
+        if (fbRes.success) {
+          soundFX.playVictory();
+          const updated = buyPet(pet.id);
+          setGameState(updated);
+          onStateUpdate();
+          setActiveTab('mypets');
+        } else if (!fbRes.canceled) {
+          alert(fbRes.error || 'Facebook adoption purchase failed.');
+        }
+      } catch (fbErr: any) {
+        console.warn('Facebook adoption error:', fbErr);
+      } finally {
+        setIsAdopting(false);
+      }
+      return;
+    }
+
+    // 2. Standard Web & Iframe checkout (Stripe / Sandbox)
     const checkoutWindow = prepareCheckoutWindow();
     try {
       setIsAdopting(true);
@@ -107,6 +133,44 @@ export const PetSanctuary: React.FC<PetSanctuaryProps> = ({
 
   const handleBuyAccessory = async (acc: AccessoryItem) => {
     if (!selectedPet) return;
+
+    // 1. Facebook Instant Games In-App Purchases
+    if (isFBInstantEnvironment()) {
+      setIsAdopting(true);
+      soundFX.playClick();
+      try {
+        const fbRes = await purchaseViaFBInstant(`accessory_${acc.id}`, 'guest');
+        if (fbRes.success) {
+          soundFX.playVictory();
+          const updated = loadGameState();
+          if (!updated.unlockedAccessories.includes(acc.id)) {
+            updated.unlockedAccessories.push(acc.id);
+          }
+          const target = updated.rescuedPets.find((p) => p.id === selectedPet.id);
+          if (target) {
+            if (!Array.isArray(target.accessories)) {
+              target.accessories = target.accessory && target.accessory !== 'none' ? [target.accessory] : [];
+            }
+            if (!target.accessories.includes(acc.id)) {
+              target.accessories.push(acc.id);
+            }
+            target.accessory = acc.id;
+          }
+          saveGameState(updated);
+          setGameState({ ...updated });
+          onStateUpdate();
+        } else if (!fbRes.canceled) {
+          alert(fbRes.error || 'Facebook accessory purchase failed.');
+        }
+      } catch (fbErr: any) {
+        console.warn('Facebook accessory purchase error:', fbErr);
+      } finally {
+        setIsAdopting(false);
+      }
+      return;
+    }
+
+    // 2. Standard Web & Iframe checkout (Stripe / Sandbox)
     const checkoutWindow = prepareCheckoutWindow();
     try {
       setIsAdopting(true);

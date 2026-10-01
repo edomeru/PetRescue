@@ -6,6 +6,7 @@ import { loadGameState, saveGameState } from '../lib/gameState';
 import { getLocalUserId, syncStateWithFirebase } from '../lib/firebase';
 import { soundFX } from '../game/audio/SoundFX';
 import { prepareCheckoutWindow, navigateToCheckout, closeCheckoutWindow } from '../lib/checkout';
+import { isFBInstantEnvironment, purchaseViaFBInstant } from '../lib/fbinstant';
 
 interface ShopModalProps {
   isOpen: boolean;
@@ -288,12 +289,34 @@ export const ShopModal: React.FC<ShopModalProps> = ({
 
   const handlePurchase = async (item: ShopItem) => {
     soundFX.playClick();
+    const userId = getLocalUserId();
+
+    // 1. Facebook Instant Games In-App Purchases (native Facebook checkout)
+    if (isFBInstantEnvironment()) {
+      setLoadingItemId(item.id);
+      setSuccessMessage(null);
+      try {
+        const fbRes = await purchaseViaFBInstant(item.id, userId);
+        if (fbRes.success) {
+          awardRewards(item);
+          soundFX.playVictory();
+          setSuccessMessage(`Purchased ${item.title} via Facebook Pay! Added to your inventory. 🎉`);
+        } else if (!fbRes.canceled) {
+          alert(fbRes.error || 'Facebook purchase could not be completed.');
+        }
+      } catch (fbErr: any) {
+        console.warn('Facebook Instant Games purchase error:', fbErr);
+      } finally {
+        setLoadingItemId(null);
+      }
+      return;
+    }
+
+    // 2. Standard Web & Iframe checkout (Stripe / Sandbox for itch.io, GameJolt, CrazyGames, Vercel)
     // Prepare checkout popup window immediately on click if running in an iframe (e.g. GameJolt)
     const checkoutWindow = prepareCheckoutWindow();
     setLoadingItemId(item.id);
     setSuccessMessage(null);
-
-    const userId = getLocalUserId();
 
     // Persist pending context in localStorage so returning from Stripe restores exact tab & level
     if (typeof window !== 'undefined') {
