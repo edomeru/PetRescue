@@ -10,7 +10,7 @@ export default function PrivacyPolicyPage() {
 
       <section className="space-y-4 text-slate-300 text-sm leading-relaxed">
         <p>
-          Welcome to <strong>Pawtora</strong>, operated and published by <strong>Alarte Edmer D</strong> (&ldquo;we&rdquo;, &ldquo;our&rdquo;, or &ldquo;us&rdquo;). We respect your privacy and are committed to protecting any information you share while playing our game across all supported platforms (including Facebook Instant Games, itch.io, GameJolt, CrazyGames, and our web portal at https://pawtora.site).
+          Welcome to <strong>Pawtora</strong>, operated and published by <strong>ALARTE EDMER DE JESUS</strong> (also known as Alarte Edmer D, &ldquo;we&rdquo;, &ldquo;our&rdquo;, or &ldquo;us&rdquo;). We respect your privacy and are committed to protecting any information you share while playing our game across all supported platforms (including Facebook Instant Games, itch.io, GameJolt, CrazyGames, and our web portal at https://pawtora.site).
         </p>
 
         <h2 className="text-lg font-semibold text-white mt-6">1. Information We Collect</h2>
