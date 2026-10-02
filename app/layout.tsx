@@ -14,7 +14,7 @@ export const metadata: Metadata = {
   description: 'Play Pawtora - a 3D puzzle and pet sanctuary game! Rescue cute pets, adopt and style them with accessories, and build your dream sanctuary.',
   keywords: ['pawtora', 'pet sanctuary', 'puzzle game', 'virtual pet', 'adopt pet', 'phaser game', 'browser game'],
   other: {
-    'facebook-domain-verification': 'q2dctrpobnhawjhmubzebzkdnpgfni',
+    'facebook-domain-verification': '5r5xkez9rf030lp7meynzqrtzmz1t1',
   },
 };
 
