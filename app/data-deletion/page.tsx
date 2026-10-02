@@ -10,7 +10,7 @@ export default function DataDeletionPage() {
 
       <section className="space-y-4 text-slate-300 text-sm leading-relaxed">
         <p>
-          According to Facebook Platform Rules and standard data privacy guidelines, users have the right to request deletion of their gameplay data and associated platform identifiers.
+          According to Facebook Platform Rules and standard data privacy guidelines, users have the right to request deletion of their gameplay data and associated platform identifiers. Pawtora is owned and operated by <strong>Alarte Edmer D</strong>.
         </p>
 
         <h2 className="text-lg font-semibold text-white mt-6">How to Delete Your Data from Facebook:</h2>

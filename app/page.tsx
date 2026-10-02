@@ -378,7 +378,13 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="w-full py-4 text-center text-xs text-slate-300 font-semibold border-t border-white/10 relative z-20 backdrop-blur-md bg-emerald-950/30">
-        Pawtora Web Game • Powered by Next.js & Phaser 3 Engine
+        <div>Pawtora Web Game • Powered by Next.js &amp; Phaser 3 Engine</div>
+        <div className="mt-1 text-slate-400 text-[11px]">
+          Published &amp; Operated by <strong className="text-slate-200 font-bold">Alarte Edmer D</strong> • <a href="/privacy" className="hover:underline text-pink-400">Privacy Policy</a> • <a href="/data-deletion" className="hover:underline text-pink-400">Data Deletion</a>
+        </div>
+        <div className="text-[10px] text-slate-500 mt-1">
+          © 2026 Alarte Edmer D. All rights reserved.
+        </div>
       </footer>
 
       {/* Modals */}
