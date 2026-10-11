@@ -31,7 +31,8 @@ export async function POST(req: Request) {
       apiVersion: '2024-06-20',
     });
 
-    const origin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const rawOrigin = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+    const origin = rawOrigin.replace(/\/+$/, '');
 
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ['card'],
